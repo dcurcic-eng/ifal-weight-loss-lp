@@ -1,6 +1,13 @@
 <!doctype html>
 <html lang="en">
 <head>
+<!-- Google Tag Manager -->
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-PP873XSL');</script>
+<!-- End Google Tag Manager -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
@@ -370,6 +377,8 @@ figure{margin:0}
 .field.is-error input,.field.is-error textarea{border-color:#E8A08F}
 .field .err{font-size:12px;color:#E8A08F;min-height:0}
 .consent{font-size:13px;line-height:1.5;color:var(--w60)}
+.hp-field{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
+.form-error{display:none;font-size:14px;line-height:1.4;color:#E8A08F}
 .form-success{position:absolute;inset:0;background:var(--ink);padding:56px 48px;display:flex;flex-direction:column;justify-content:center;gap:20px;opacity:0;visibility:hidden}
 .form-success h3{font-size:40px}
 .form-success p{font-size:17px;line-height:1.5;color:var(--w70)}
@@ -666,6 +675,10 @@ figure{margin:0}
 </style>
 </head>
 <body>
+<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-PP873XSL"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
 
 <header class="nav" id="nav">
   <div class="nav-inner">
@@ -1057,17 +1070,22 @@ figure{margin:0}
   <div class="contact__form">
     <div class="form-panel reveal">
       <h3><span>Request your</span><span class="g">$199 consultation</span></h3>
-      <!-- Set data-endpoint to the CRM or form handler URL that should receive submissions (JSON POST). -->
-      <form id="lead-form" novalidate data-endpoint="">
+      <!-- Posts JSON to lead.php in this folder, which creates/tags the patient in Decoda. -->
+      <form id="lead-form" novalidate>
         <div style="display:flex;flex-direction:column;gap:26px">
           <div class="frow">
-            <div class="field"><label for="f-first">First name</label><input id="f-first" name="first_name" autocomplete="given-name" required><span class="err"></span></div>
-            <div class="field"><label for="f-last">Last name</label><input id="f-last" name="last_name" autocomplete="family-name" required><span class="err"></span></div>
+            <div class="field"><label for="f-first">First name</label><input id="f-first" name="firstName" autocomplete="given-name" required><span class="err"></span></div>
+            <div class="field"><label for="f-last">Last name</label><input id="f-last" name="lastName" autocomplete="family-name" required><span class="err"></span></div>
           </div>
           <div class="field"><label for="f-phone">Phone number</label><input id="f-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" required><span class="err"></span></div>
           <div class="field"><label for="f-email">Email</label><input id="f-email" name="email" type="email" autocomplete="email" required><span class="err"></span></div>
           <div class="field"><label for="f-msg">Message</label><textarea id="f-msg" name="message" placeholder="Tell us about your goals or any questions"></textarea></div>
-          <input type="hidden" name="eligibility_check" id="f-quiz">
+          <input type="hidden" name="eligibility" id="f-quiz">
+          <div class="hp-field" aria-hidden="true">
+            <label for="company_website">Company website</label>
+            <input type="text" id="company_website" name="company_website" tabindex="-1" autocomplete="off">
+          </div>
+          <p class="form-error" id="form-error" role="alert" aria-live="polite"></p>
           <button class="btn btn--primary btn--block" type="submit"><span class="btn__fill" aria-hidden="true"></span><span class="btn__label">Book your $199 consultation</span><span class="btn__disc" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><span class="btn__spinner" aria-hidden="true"></span></button>
           <p class="consent">By submitting, you agree that IFAL may contact you by phone, text or email about your consultation. Eligibility is confirmed at your visit.</p>
         </div>
@@ -1409,17 +1427,40 @@ function initVideo(){
   });
 }
 
-/* ---------------- Lead form (button lifecycle per motion guide 4.1) ---------------- */
+/* ---------------- Lead form -> Decoda via lead.php (button lifecycle per motion guide 4.1) ---------------- */
+// lead.php sits in this same folder (/lp/weight-loss/).
+var LEAD_ENDPOINT="lead.php",FORM_NAME="ifal_weight_loss_ad_form";
+var TRACKED=["utm_source","utm_medium","utm_campaign","utm_term","utm_content","utm_id",
+             "gclid","gbraid","wbraid","fbclid","ttclid","msclkid","li_fat_id"];
+var ATTR_KEY="ifal_attr";
+
+// First-touch attribution: survives the quiz and any in-page navigation that
+// drops the query string before the visitor reaches the form.
+function getAttribution(){
+  var current={},qs=new URLSearchParams(location.search);
+  TRACKED.forEach(function(k){var v=qs.get(k);if(v)current[k]=v;});
+  try{
+    if(Object.keys(current).length){sessionStorage.setItem(ATTR_KEY,JSON.stringify(current));return current;}
+    var saved=sessionStorage.getItem(ATTR_KEY);
+    if(saved)return JSON.parse(saved)||{};
+  }catch(e){/* storage blocked */}
+  return current;
+}
+
 function initForm(){
-  var form=document.getElementById("lead-form"),btn=form.querySelector("button[type=submit]"),panel=form.closest(".form-panel"),ok=panel.querySelector(".form-success");
+  getAttribution();
+  var form=document.getElementById("lead-form"),btn=form.querySelector("button[type=submit]"),panel=form.closest(".form-panel"),ok=panel.querySelector(".form-success"),errEl=document.getElementById("form-error");
+  // Accepts (555) 123-4567 and a leading 1 / +1.
+  function phone10(v){return v.replace(/\D/g,"").replace(/^1(?=\d{10}$)/,"");}
+  function showError(msg){errEl.textContent=msg||"";errEl.style.display=msg?"block":"none";}
   function check(){
     var valid=true;
     form.querySelectorAll("input[required]").forEach(function(i){
       var f=i.closest(".field"),e=f.querySelector(".err"),msg="";
       var v=i.value.trim();
       if(!v)msg="Please fill this in.";
-      else if(i.type==="email"&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))msg="Please enter a valid email.";
-      else if(i.type==="tel"&&v.replace(/\D/g,"").length<10)msg="Please enter a 10 digit phone number.";
+      else if(i.type==="email"&&!/^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$/.test(v))msg="Please enter a valid email.";
+      else if(i.type==="tel"&&!/^\d{10}$/.test(phone10(v)))msg="Please enter a 10 digit US phone number.";
       f.classList.toggle("is-error",!!msg);e.textContent=msg;if(msg)valid=false;
     });
     return valid;
@@ -1430,19 +1471,44 @@ function initForm(){
   });
   form.addEventListener("submit",function(e){
     e.preventDefault();
+    showError("");
     if(!check()){if(hasG)gsap.fromTo(btn,{x:0},{keyframes:{x:[-4,4,-2,0]},duration:.3,ease:"power1.out"});var bad=form.querySelector(".is-error input");bad&&bad.focus();return;}
     var label=btn.querySelector(".btn__label"),spin=btn.querySelector(".btn__spinner"),fill=btn.querySelector(".btn__fill"),sp;
     btn.disabled=true;btn.setAttribute("aria-busy","true");btn.style.opacity=1;
     if(hasG){gsap.to(label,{autoAlpha:0,duration:.15});gsap.to(fill,{width:btn.clientWidth-10,duration:.3,ease:"power2.out"});sp=gsap.to(spin,{autoAlpha:1,rotation:360,duration:.8,ease:"none",repeat:-1});}
-    var data={};new FormData(form).forEach(function(v,k){data[k]=v;});data.page=location.href;
-    var url=form.getAttribute("data-endpoint");
-    var req=url?fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}).then(function(r){if(!r.ok)throw new Error(r.status);}):new Promise(function(r){console.warn("Lead form: no data-endpoint set, submission not sent.",data);setTimeout(r,900);});
-    req.then(function(){
+    function val(n){var el=form.elements[n];return el&&el.value?el.value.trim():"";}
+    var payload={
+      firstName:val("firstName"),
+      lastName:val("lastName"),
+      email:val("email"),
+      phone:phone10(val("phone")),
+      message:val("message"),
+      eligibility:val("eligibility"),
+      smsConsent:false,
+      pageUrl:location.href,
+      referrer:document.referrer||"",
+      attribution:getAttribution(),
+      company_website:val("company_website")
+    };
+    fetch(LEAD_ENDPOINT,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
+    .then(function(r){
+      return r.json().catch(function(){return null;}).then(function(d){
+        if(!r.ok||!d||d.ok!==true)throw new Error((d&&d.error)||"Server error");
+      });
+    }).then(function(){
+      // GTM: these pushes are the only submission counting.
+      window.dataLayer=window.dataLayer||[];
+      window.dataLayer.push({"event":"form-success","form_name":FORM_NAME,"form_location":location.href});
+      window.dataLayer.push({"event":"lead_submit","form_name":FORM_NAME,"form_location":location.href});
       sp&&sp.kill();
       if(hasG){gsap.timeline().to(form,{autoAlpha:0,duration:.25}).fromTo(ok,{autoAlpha:0,y:16},{autoAlpha:1,y:0,duration:.4,ease:"power2.out"});}else{ok.style.opacity=1;ok.style.visibility="visible";}
-    }).catch(function(){
+    }).catch(function(err){
+      console.error(err);
       sp&&sp.kill();btn.disabled=false;btn.removeAttribute("aria-busy");
       if(hasG){gsap.set(spin,{autoAlpha:0});gsap.to(label,{autoAlpha:1,duration:.15});gsap.fromTo(btn,{x:0},{keyframes:{x:[-4,4,-2,0]},duration:.3});}
+      // lead.php returns readable 400/429 messages; anything else gets a generic fallback.
+      var m=err&&err.message?err.message:"";
+      showError(/^(Please|Too many)/.test(m)?m:"Submission failed. Please try again or call (720) 340-5522.");
       label.textContent="Please try again or call us";
     });
   });
